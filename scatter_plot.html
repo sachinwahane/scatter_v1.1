@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+
+
+<head>
+
+
+<script src="d3.js"></script>
+<link href="css/bootstrap.min.css" rel="stylesheet" media="screen">
+
+
+</head>
+
+<body>
+<div class="row">
+  <div class="col-sm-12">
+<!--ToggleLog 
+<input id="ck_toggle" type="checkbox" name="toggleLog" onclick="toggleLog(this)" />-->
+
+Select Region : 
+<select onchange="select(this.value)">
+  <option value="">All Regions</option>
+  <option value="North East">North East</option>
+  <option value="South East">South East</option>
+  <option value="Mid West">Mid West</option>
+  <option value="Central">Central</option>
+  <option value="West">West</option>
+ 
+</select> 
+<div class="row">
+<div class="col-sm-6">
+<div id="graph1"></div>
+</div><div class="col-sm-6">
+  <div id="graph2"></div>
+</div>
+</div>
+
+<script>
+
+var margin = {top: 50, right: 10, bottom: 40, left: 35},
+    width = 760 - margin.left - margin.right,
+   height = 800 - margin.top - margin.bottom;
+
+/* 
+ * value accessor - returns the value to encode for a given data object.
+ * scale - maps value to a visual display encoding, such as a pixel position.
+ * map function - maps from data value to display value
+ * axis - sets up axis
+ */ 
+var superscript = "⁰¹²³⁴⁵⁶⁷⁸⁹",
+    formatPower = function(d) { return (d + "").split("").map(function(c) { return superscript[c]; }).join(""); };
+
+// setup x 
+
+var xValue = function(d) { return d["POP"] * 5;}, // data -> value
+    xScale = d3.scale.log().domain([1e0, 1e9]).range([0, width]), // value -> display
+    xMap = function(d) { return xScale(xValue(d) * 5);}, // data -> display
+    xAxis = d3.svg.axis().scale(xScale).orient("bottom").ticks(5, function (d) { return 10 + formatPower(Math.round(Math.log(d) / Math.LN10)) });
+    
+var yValue = function(d) { return d["GMP"];}, // data -> value
+    yScale = d3.scale.log().domain([1e0, 1e9]).range([height, 0]), // value -> display
+    yMap = function(d) { return yScale(yValue(d));}, // data -> display
+    yAxis = d3.svg.axis().scale(yScale).orient("left").ticks(5, function(d) { return 10 + formatPower(Math.round(Math.log(d) / Math.LN10)); });
+
+
+// setup y
+
+ //xAxis.tickFormat(function (d) {    return xScale.tickFormat(5,d3.format(",d"))(d);    });
+
+// setup fill color
+var cValue = function(d) { return d.GeoName;},
+    color = d3.scale.category100();//8355711,3092807
+
+// add the graph canvas to the body of the webpage
+var svg = d3.select("#graph1")
+.append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+// add the tooltip area to the webpage
+var tooltip = d3.select("body").append("div")
+    .attr("class", "tooltip")
+    .style("opacity", 50);
+
+var zoom = d3.behavior.zoom()
+    .scaleExtent([1, 10])
+    .on("zoom", zoomed);
+
+
+// load data
+
+d3.csv("data/stTOTnew.csv", function(error, data) {
+//var bisect = d3.bisector(function(d) { return d[0]; });
+// change string (from CSV) into number format
+  data.forEach(function(d) {
+    d["GMP"] = +d["GMP"] ;
+    d["POP"] = +d["POP"] * 30;
+
+  });
+
+
+  // don't want dots overlapping axis, so add in buffer to data domain
+  xScale.domain([d3.min(data, xValue) * 5, d3.max(data, xValue) * 5]);
+  yScale.domain([d3.min(data, yValue)-5, d3.max(data, yValue)+5]);
+  //var xVal = d3.min(data, xValue);
+  //var yVal = d3.min(data, yValue);
+  
+  // x-axis
+  svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + (height + 270)+ ")")
+      .call(xAxis)
+    .append("text")
+      .attr("class", "label")
+      .attr("x", width + 180)
+      .attr("y", 32)
+      .style("text-anchor", "end")
+      .text("Population")
+      
+
+svg.append("text")
+      .attr("x",width - 100)
+      .attr("y", 0 - (margin.top / 2))
+      .attr("text-anchor", "middle")
+      .style("font-size", "16px")
+      .style("font-family", "sans-serif")
+      .text("Metropolitan Data From 2001-2012");
+
+  // y-axis
+  svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+    .append("text")
+      .attr("class", "label")
+      .attr("transform", "rotate(0)")
+      .attr("x", 150)
+      .attr("y", 0 - (margin.top / 2))
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+      .text("Gross Metropolitan Product");
+
+    
+  
+
+      // draw dots
+   var dot = svg.selectAll(".dot")
+      .data(data)
+    .enter().append("circle")
+      .attr("class", "dot")
+      //.attr("name", function(d){return d["GeoName"]})
+      //.attr("yr", function(d){return d["Yr"]})
+      .style("opacity","0.1")
+      .style("fill", function(d) { return color(cValue(d));}) 
+      .call(position)
+      .call(zoom)
+      .on("mouseover", function(d) {
+          
+          tooltip.transition()
+               .duration(200)
+               .style("opacity", .9);
+               
+          tooltip.html(d["GeoName"] + "<br/> Population : "+d["POP"])
+               .style("left", (d3.event.pageX + 10) + "px")
+               .style("top", (d3.event.pageY - 28) + "px")
+               var selectedGeo = d["GeoName"];
+               d3.selectAll("circle")
+                  //.attr("class", "dot")
+                .filter(function (d){return d["GeoName"]==selectedGeo;
+
+                })
+                  
+                  .each(function (d,i){
+                    d3.select(this).style("fill", "blue")
+                    .style("opacity", "50")
+
+                    callme(data, selectedGeo);
+                  }) 
+                                    
+        })
+      .on("mouseout", function(d) {
+          tooltip.transition()
+               
+               .duration(500)
+               .style("opacity", 0)
+        d3.selectAll("circle")
+               .style("fill", "#808080")
+               .style("opacity", "0.1");
+               
+      });
+    
+      
+
+  var dataset = [];
+  d3.csv("data/pred.csv", function(data){
+    data.forEach(function (d, i){
+      dataset.push(d["x"]);
+    });
+
+    svg.selectAll("path")
+      .data(dataset)
+    .enter()
+      .append("line")
+      .attr("class", "line")
+      .attr("x1", dataset[999] * 39) //upper
+      .attr("y1", dataset[1000] / 22)//upper
+      .attr("x2", dataset[0] * 75)//lower
+      .attr("y2", dataset[1] * 69)//lower
+
+  });
+
+//newly added section start
+  var label = svg.append("text")
+    .attr("class", "year label")
+    .attr("text-anchor", "end")
+    .attr("y", height + 290 - 24)
+    .attr("x", width + 180)
+    .text(2001)
+      
+  var box = label.node().getBBox();
+          
+  function changecolor(){
+    d3.selectAll("circle")
+      .style("fill", "#808080")
+      .style("opacity", "0.1");
+  }
+  var overlay = svg.append("rect")
+        .attr("class", "overlay")
+        .attr("x", box.x)
+        .attr("y", box.y)
+        .attr("width", box.width)
+        .attr("height", box.height)
+        .on("mouseover", enableInteraction);
+
+    svg.transition()
+      .duration(30000)
+      .ease("linear")
+      .tween("year", tweenYear)
+      .each("end", enableInteraction)
+    
+
+function position(dot) {
+    dot .attr("cx", xMap)
+        .attr("cy", yMap)
+        .attr("r", 3.5);
+  }
+   
+function enableInteraction() {
+    var yearScale = d3.scale.linear()
+        .domain([2001, 2012])
+        .range([box.x + 10, box.x + box.width - 10])
+        .clamp(true)
+        
+    // Cancel the current transition, if any.
+    svg.transition().duration(0);
+
+    overlay
+        .on("mouseover", mouseover)
+        .on("mouseout", mouseout)
+        .on("mousemove", mousemove)
+        .on("touchmove", mousemove);
+
+    function mouseover() {
+      label.classed("active", true)
+      d3.selectAll("circle")
+        .style("fill", "#808080")
+        .style("opacity", "0.1");
+    }
+
+    function mouseout() {
+      label.classed("active", false);
+    }
+
+    function mousemove() {
+      displayYear(yearScale.invert(d3.mouse(this)[0]));
+    }
+  }
+
+
+function tweenYear() {
+    var year = d3.interpolateNumber(2001, 2012);
+    return function(t) { displayYear(year(t)); };
+  }
+
+  // Updates the display to show the specified year.
+  function displayYear(year) {
+    //dot.data(interpolateData(year), key).call(position);
+    interpolateData(year);
+    label.text(Math.round(year));
+  }
+
+function interpolateData(year){
+    
+  d3.selectAll("circle")
+  .filter(function (d){ return d["Yr"] < Math.floor(year);})
+  .each(function (d,i){
+                    d3.select(this)
+                    .style("fill", function (d){
+                      if(d["Yr"] < Math.floor(year)){return "red"}
+                        else {return "#808080"};
+                      
+                    })
+                    .style("opacity", "50")
+                  }) 
+        
+}
+
+});
+
+ function select(Regions){
+  //alert(year);
+  d3.selectAll("circle")
+    .style("fill", "#808080")
+    .style("opacity", "0.1")
+    .filter(function (d){ return d["Region"] == Regions;})
+  .each(function (d,i){
+                    d3.select(this)
+                    .style("fill", function (d){
+                      if(d["Region"] == Regions){return "red"}
+                        else {return "#808080"};
+                      
+                    })
+                    .style("opacity", "50")
+                  })
+  label.text(Math.round(year));
+ }
+
+function zoomed() {
+      svg.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+  }
+
+
+</script>
+
+<script>
+ var margin = {top: 30, right: 2, bottom: 30, left: 120},
+    width = 650 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+
+  var x1 = d3.scale.ordinal().rangeRoundBands([0, width], .05)
+  var y1 = d3.scale.linear().range([height, 0]);
+  
+  var xAxis1 = d3.svg.axis()
+        .scale(x1)
+        .orient("bottom");
+        
+
+  var yAxis1 = d3.svg.axis()
+        .scale(y1)
+        .orient("left");
+
+  var svg1 = d3.select("#graph2").append("svg")
+          .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform","translate(" + margin.left + "," + margin.top + ")");
+  var color = d3.scale.category20();
+
+  var tooltip = d3.select("body").append("div")
+    .attr("class", "tooltip")
+    .style("opacity", 50);
+
+  function callme(csv_data, val) {
+
+    var data = d3.nest()
+      .key(function (d){return d.Region})
+      //.key(function(d) { return d.Yr;})
+      //.key(function (d){return d.Region;})
+      .rollup(function(d) {
+        return d3.sum(d, function(g) {return g.POP; });
+      
+      }).entries(csv_data);
+
+    //console.log(data);
+    data.forEach(function(d) {
+      d.Region = d.key;
+      //d.Yr = d.key;
+      d.POP = d.values;
+    });
+
+    
+    x1.domain(data.map(function(d) { return d.Region; }));
+    y1.domain([0.1,900]);
+    //0, d3.max(data, function(d) { return d.POP; })
+    svg1.append("g")
+    .attr("class", "x axis")
+    .attr("transform", "translate(0," + height + ")")
+    .call(xAxis1)
+    .selectAll("text")
+    .style("text-anchor", "end")
+    .attr("dx", 40)
+    .attr("dy", 15)
+    .attr("transform", "rotate(0)" );
+
+    svg1.append("g")
+    .attr("class", "y axis")
+    .call(yAxis1)
+    .append("text")
+    .attr("transform", "rotate(0)")
+    .attr("x", 25)
+    .attr("y", 10)
+    .attr("dy", "-16px")
+    .style("text-anchor", "end")
+    .text("Population");
+
+    svg1.selectAll(".bar")
+    .data(csv_data)
+
+    .enter().append("rect")
+    .style("fill", function (d, i){return color(i);})
+    .filter(function (d){ return d["GeoName"] == val;})
+    .attr("x", function(d) { return x1(d.Region); })
+    .attr("width", x1.rangeBand())
+    .attr("y", function(d) { return y1(d.POP ); })
+    .attr("height", function(d) { return height - y1(d.POP ); })
+    .on("mousemove", function(d) {
+          
+          tooltip.transition()
+               .duration(200)
+               .style("opacity", .9);
+               //d3.selectAll(".dot").data(d["GeoName"])
+          tooltip.html(d.GeoName+ "<br/> Population : "+d.POP)
+               .style("left", (d3.event.pageX + 10) + "px")
+               .style("top", (d3.event.pageY - 28) + "px")
+
+        })
+      .on("mouseout", function(d) {
+          tooltip.transition()                                    
+               
+               .duration(500)
+               .style("opacity", 0)
+
+      });
+
+  }
+  
+
+</script>
+
+
+</body>
+</html>
